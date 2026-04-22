@@ -62,11 +62,11 @@ CSC_F_BIT_WHEEL_REVOLUTION_DATA_PRESENT = 0b0000_0001
 CSC_F_BIT_CRANK_REVOLUTION_DATA_PRESENT = 0b0000_0010
 
 # feature flags
-CP_F_BIT_WHEEL_REVOLUTION_DATA_PRESENT = 0b0001_0000
-CP_F_BIT_CRANK_REVOLUTION_DATA_PRESENT = 0b0010_0000
+CP_F_BIT_WHEEL_REVOLUTION_DATA_PRESENT = 0b0000_0100
+CP_F_BIT_CRANK_REVOLUTION_DATA_PRESENT = 0b0000_1000
 # measurement flags
-CP_M_BIT_WHEEL_REVOLUTION_DATA_PRESENT = 0b0000_0100
-CP_M_BIT_CRANK_REVOLUTION_DATA_PRESENT = 0b0000_1000
+CP_M_BIT_WHEEL_REVOLUTION_DATA_PRESENT = 0b0001_0000
+CP_M_BIT_CRANK_REVOLUTION_DATA_PRESENT = 0b0010_0000
 
 
 class BatteryService(Service):
@@ -115,13 +115,13 @@ class CPService(Service):
     def __init__(self):
         self.measure_flags = (
             0x0
-            # | CP_M_BIT_CRANK_REVOLUTION_DATA_PRESENT
-            # | CP_M_BIT_WHEEL_REVOLUTION_DATA_PRESENT
+            | CP_M_BIT_CRANK_REVOLUTION_DATA_PRESENT
+            | CP_M_BIT_WHEEL_REVOLUTION_DATA_PRESENT
         )
         self.feature_flags = (
             0x0
-            # | CP_F_BIT_CRANK_REVOLUTION_DATA_PRESENT
-            # | CP_F_BIT_WHEEL_REVOLUTION_DATA_PRESENT
+            | CP_F_BIT_CRANK_REVOLUTION_DATA_PRESENT
+            | CP_F_BIT_WHEEL_REVOLUTION_DATA_PRESENT
         )
         super().__init__(CP_UUID, primary=True)
 
@@ -131,15 +131,13 @@ class CPService(Service):
 
     def notify_new_rate(self, power, w_event_ms, c_event_ms, crank_rev, wheel_rev):
         rate = struct.pack(
-            "<Hh",
-            *[
-                self.measure_flags,
-                power & 0x7FFF,
-                # wheel_rev & 0xFFFFFFFF,
-                # w_event_ms & 0xFFFF,
-                # crank_rev & 0xFFFF,
-                # c_event_ms & 0xFFFF,
-            ],
+            "<HhIHHH",
+            self.measure_flags,
+            power & 0x7FFF,
+            wheel_rev & 0xFFFFFFFF,
+            w_event_ms & 0xFFFF,
+            crank_rev & 0xFFFF,
+            c_event_ms & 0xFFFF,
         )
         self.cp_measurement.changed(rate)
 
