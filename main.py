@@ -22,10 +22,17 @@ def parse_args():
         action="store_true",
         help="Use simulated power data instead of real bike",
     )
+    parser.add_argument(
+        "--ant-driver",
+        type=str,
+        default="usb2",
+        choices=["usb1", "usb2"],
+        help="ANT driver type: usb1 (serial) or usb2 (direct USB). Default: usb2",
+    )
     return parser.parse_args()
 
 
-async def main(bike_id: int, protocols: list[str], mock: bool):
+async def main(bike_id: int, protocols: list[str], mock: bool, ant_driver: str):
     tasks = []
 
     # Import and initialize bike source
@@ -44,7 +51,7 @@ async def main(bike_id: int, protocols: list[str], mock: bool):
         from tx.ant import ANTTx
         from tx.conv import ANTConv
 
-        ant_tx = ANTTx()
+        ant_tx = ANTTx(driver_type=ant_driver)
         ant_bike_data = ANTConv(src)
         tasks.extend([ant_bike_data.loop(), ant_tx.loop(bike_data=ant_bike_data)])
 
@@ -79,4 +86,4 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    asyncio.run(main(args.bike_id, protocols, args.mock))
+    asyncio.run(main(args.bike_id, protocols, args.mock, args.ant_driver))

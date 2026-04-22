@@ -7,30 +7,36 @@ from ant.core import driver, node, message, constants, resetUSB
 
 
 class ANTTx:
-    def __init__(self):
-        devs = usb.core.find(find_all=True, idVendor=0x0FCF)
-        for dev in devs:
-            if dev.idProduct in [0x1008, 0x1009]:
-                resetUSB.reset_USB_Device()
-                time.sleep(1)
-                stick = driver.USB2Driver(
-                    log=None,
-                    debug=False,
-                    idProduct=dev.idProduct,
-                    bus=dev.bus,
-                    address=dev.address,
-                )
-                try:
-                    print("found stick, opening...")
-                    stick.open()
-                except:
-                    print("failed to open stick, trying next")
-                    continue
-                stick.close()
-                break
+    def __init__(self, driver_type="usb2"):
+        if driver_type == "usb2":
+            devs = usb.core.find(find_all=True, idVendor=0x0FCF)
+            for dev in devs:
+                if dev.idProduct in [0x1008, 0x1009]:
+                    resetUSB.reset_USB_Device()
+                    time.sleep(1)
+                    stick = driver.USB2Driver(
+                        log=None,
+                        debug=False,
+                        idProduct=dev.idProduct,
+                        bus=dev.bus,
+                        address=dev.address,
+                    )
+                    try:
+                        print("found stick, opening...")
+                        stick.open()
+                    except:
+                        print("failed to open stick, trying next")
+                        continue
+                    stick.close()
+                    break
+            else:
+                print("No ANT devices available (USB2 search failed)")
+                exit(1)
         else:
-            print("No ANT devices available")
-            exit(1)
+            # Use the USB1Driver with the specific serial device identified earlier
+            print("Connecting to ANT stick via serial port /dev/tty.usbserial-110...")
+            stick = driver.USB1Driver("/dev/tty.usbserial-110", baudRate=9600)
+
         antnode = node.Node(stick)
         print("Starting ANT node")
         antnode.start()
