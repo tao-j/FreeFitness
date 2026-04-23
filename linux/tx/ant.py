@@ -94,13 +94,6 @@ class ANTTx:
                 if bike_data.no_data:
                     print("ANT: No data")
                     continue
-                print(
-                    "ANT TX: ",
-                    f"{int(bike_data.get_power()):3d} W {int(bike_data.get_cadence()):3d} RPM {bike_data.get_wheel_revs():5d} REV "
-                    f"{bike_data.get_wheel_event_tick():5d} tk {bike_data.speed * 3.6 / 1.67:2.1f} mph",
-                    time.time(),
-                    end="\n",
-                )
                 PWR_PAGE_ID = 0x10
                 payload = struct.pack(
                     "<BB" + "BB" + "HH",
@@ -114,6 +107,12 @@ class ANTTx:
                     ],
                 )
                 self.send_msg(self.p_chan, payload)
+                print(
+                    f"ANT 0x10 PWR | evcnt {bike_data.get_power_event_count():3d}"
+                    f" | pwr {bike_data.get_power():4d} W"
+                    f" | cum {bike_data.get_cum_power():5d} W"
+                    f" | cad {bike_data.get_cadence():3d} rpm"
+                )
 
                 DEFAULT_PAGE_ID = 0x00
                 payload = struct.pack(
@@ -125,6 +124,11 @@ class ANTTx:
                     bike_data.get_wheel_revs(),
                 )
                 self.send_msg(self.c_chan, payload)
+                print(
+                    f"ANT 0x00 SPD | wheel {bike_data.get_wheel_revs():6d} rev"
+                    f" @ {bike_data.get_wheel_event_tick():5d} tk"
+                    f" | {bike_data.speed:5.2f} m/s ({bike_data.speed * 2.2369:5.2f} mph)"
+                )
 
                 # payload = bytearray(b"\x11")  # General Settings Page
                 # payload.append(0xFF)

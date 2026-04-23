@@ -1,6 +1,5 @@
 import asyncio
 import struct
-import time
 
 from bluez_peripheral.gatt.service import Service, ServiceCollection
 from bluez_peripheral.gatt.characteristic import (
@@ -268,20 +267,16 @@ class BLETx:
             wheel_event_tick = bike_data.get_wheel_event_tick()
             crank_event_tick = bike_data.get_crank_event_tick()
             power = bike_data.get_power()
-            print(
-                "BLE TX: ",
-                f"{power:3d} W {wheel_revs:6d} wREV {crank_revs:6d} cREV",
-                f"w{wheel_event_tick:5d} tk c{crank_event_tick:5d} tk {bike_data.speed * 3.6 / 1.67:2.1f} mph",
-                time.time(),
-                end="\n",
-            )
-            # if crank_rev_cls.notify and wheel_rev_cls.notify:
             if 1:
                 self.csc_service.notify_all(
                     wheel_rev=wheel_revs,
                     crank_rev=crank_revs,
                     w_event_tick=wheel_event_tick,
                     c_event_tick=crank_event_tick,
+                )
+                print(
+                    f"BLE 2A5B CSC | wheel {wheel_revs:6d} rev @ {wheel_event_tick:5d} tk"
+                    f" | crank {crank_revs:6d} rev @ {crank_event_tick:5d} tk"
                 )
                 # crank_rev_cls.notify = False
                 # wheel_rev_cls.notify = False
@@ -300,5 +295,10 @@ class BLETx:
                 crank_rev=crank_revs,
                 w_event_tick=wheel_event_tick,
                 c_event_tick=crank_event_tick,
+            )
+            print(
+                f"BLE 2A63 CP  | pwr {power:4d} W"
+                f" | wheel {wheel_revs:6d} rev @ {wheel_event_tick:5d} tk"
+                f" | crank {crank_revs:6d} rev @ {crank_event_tick:5d} tk"
             )
         # Handle dbus requests.
