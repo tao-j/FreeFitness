@@ -1,57 +1,48 @@
 #include "sim.h"
+#include <esp_random.h>
+
+static constexpr float WHEEL_CIRCUMFERENCE = 2.096f;  // 700c × 25 (m)
+
+static inline float rand_pm(float amplitude) {
+    // uniform in [-amplitude, +amplitude]
+    return (float)((int32_t)(esp_random() % 2001) - 1000) / 1000.0f * amplitude;
+}
 
 void Simulator::update(uint32_t dt_ms) {
-    uint32_t now = millis();
-    
-    // 1. Basic Power/Cadence Simulation (Ramping 60-120W, 60-100RPM over 30s)
-    float powerRange = 60.0f;
-    float cadenceRange = 40.0f;
-    float rampTimeS = 30.0f;
+    uint32_t now_tick = get_tick_now();
 
-    float powerStep = (powerRange / rampTimeS) * (dt_ms / 1000.0f);
-    float cadenceStep = (cadenceRange / rampTimeS) * (dt_ms / 1000.0f);
+    // Slow random walks for rpm and power — smooth drift between pedal strokes.
+    _rpm = constrain(_rpm + rand_pm(0.6f), 50.0f, 95.0f);
+    _power_w = constrain(_power_w + rand_pm(4.0f), 80.0f, 240.0f);
 
-    if (_rampUp) {
-        _curPower += powerStep;
-        _curCadence += cadenceStep;
-        if (_curPower >= 120.0f) {
-            _curPower = 120.0f;
-            _rampUp = false;
-        }
-    } else {
-        _curPower -= powerStep;
-        _curCadence -= cadenceStep;
-        if (_curPower <= 60.0f) {
-            _curPower = 60.0f;
-            _rampUp = true;
-        }
+    // Crank: hall-sensor emulation. Fire one event each time the revolution
+    // period elapses, feeding the bridge so cadence is derived from
+    // Δcount / Δtick (same as the Python sim).
+    _time_to_next_rev_ms -= (int32_t)dt_ms;
+    if (_time_to_next_rev_ms <= 0) {
+        _data.crankRevs++;
+        _crank_bridge.feed_event(_data.crankRevs, now_tick, now_tick);
+        _data.crankEventTime = (uint16_t)now_tick;
+        _time_to_next_rev_ms += (int32_t)(60000.0f / _rpm);
     }
 
-    // Add small jitter for realism
-    _data.power = (uint16_t)(_curPower + (esp_random() % 5) - 2);
-    _data.cadence = (uint8_t)(_curCadence + (esp_random() % 3) - 1);
+    // Wheel: no direct measurement. Derive speed from power, feed the
+    // wheel bridge continuously so it integrates revolutions and produces
+    // back-interpolated event ticks.
+    float speed_mps = power_to_speed(_power_w);
+    _wheel_bridge.feed_rate(speed_mps / WHEEL_CIRCUMFERENCE, now_tick);
+    _data.wheelRevs = _wheel_bridge.count_int();
+    _data.wheelEventTime = (uint16_t)(_wheel_bridge.event_tick() * 2);  // 1/1024 → 1/2048
+
+    // Latch scalars for tx consumers.
+    _data.power = (uint16_t)_power_w;
+    _data.cadence = (uint8_t)(_crank_bridge.rate_rps() * 60.0f);
+    _data.speed_mps = speed_mps;
+
+    // ANT+ power-page accumulators.
     _data.accPower += _data.power;
     _data.eventCount++;
-    
-    // 2. Crank Revolutions (BLE CSC)
-    float crankInc = (_data.cadence / 60.0f) * (dt_ms / 1000.0f);
-    _crankRes += crankInc;
-    if (_crankRes >= 1.0f) {
-        uint16_t revs = (uint16_t)_crankRes;
-        _data.crankRevs += revs;
-        _crankRes -= revs;
-        _data.crankEventTime = (uint16_t)(now * 1024 / 1000); 
-    }
 
-    // 3. Wheel Revolutions (BLE CSC)
-    float speed = 4.0f + (_curPower - 60.0f) * (4.0f / 60.0f); // 4-8 m/s (~14-28 km/h)
-    float wheelCircumference = 2.096f; 
-    float wheelInc = (speed / wheelCircumference) * (dt_ms / 1000.0f); 
-    _wheelRes += wheelInc;
-    if (_wheelRes >= 1.0f) {
-        uint32_t revs = (uint32_t)_wheelRes;
-        _data.wheelRevs += revs;
-        _wheelRes -= revs;
-        _data.wheelEventTime = (uint16_t)(now * 2048 / 1000);
-    }
+    _data.lastUpdateTick = now_tick;
+    _data.lastDataTime = millis();  // legacy field still consulted by main loop
 }
