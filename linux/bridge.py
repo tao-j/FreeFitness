@@ -1,55 +1,108 @@
-class CountGenerator:
-    """Interpolates hardware-style revolution events from a continuous rate.
+"""Time base and conversion primitives for the rate/event pipeline.
 
-    A real encoder emits (cumulative_count, event_tick) on each interrupt.
-    When only an instantaneous rate (e.g. cadence in rpm) is available, this
-    class integrates the rate and emits a synthetic event whenever the
-    running float count crosses the next integer. The event timestamp is
-    interpolated linearly between polls, assuming the rate was constant
-    across the interval.
+The pipeline's single canonical time unit is the **tick** — one 1/1024-second
+period. This is the BLE CSC/CP and ANT+ speed/cadence event-time wire
+encoding. All int variables named `*_tick` carry this unit; derive seconds
+only where physics needs them (power_to_speed, dt integration) by dividing
+by 1024.
 
-    All time values are in ticks (1/1024 s each); see clock.now_tick().
+Porting to MCU: replace `get_tick_now()` with a thin wrapper over
+`esp_timer_get_time()` or `millis()` scaled to 1/1024 s.
+"""
 
-    Usage: call inc_count() or set_count() at each poll, passing the current
-    time as `now`. This marks the end of the measurement interval. The class
-    then derives whether an integer crossing (event) occurred within that
-    interval and back-calculates the exact tick when it happened.
+import time
+
+
+def get_tick_now() -> int:
+    """Wall-clock time in ticks (1/1024 s each).
+
+    Monotonic within a session; matches the BLE event-time wire encoding
+    directly (subject to 16-bit truncation at the protocol boundary).
+    """
+    return int(time.time() * 1024)
+
+
+class RateEventBridge:
+    """Bidirectional bridge between the rate view and event view of a rotating channel.
+
+    A rotating channel (crank, wheel) has two equivalent representations:
+      - rate view: revolutions per second (continuous)
+      - event view: cumulative revolution count + timestamp of the most
+        recent integer crossing (discrete, 1/1024 s ticks, matching BLE
+        CSC/CP and ANT+ wire encoding)
+
+    A source populates whichever half it natively measures — this bridge
+    fills in the other half so the encoder always has both.
+
+    Use one of two feed methods per tick:
+      - feed_rate(rate_rps, now_tick): integrate forward; back-interpolate an
+        event tick when the running count crosses the next integer.
+      - feed_event(cum_revs, event_tick, now_tick): adopt hardware events;
+        derive the rate from Δcount / Δtick across consecutive events.
+
+    Both feeds converge on the same outputs: `count_int`, `event_tick`,
+    `rate_rps`.
+
+    Unit note: rate is in revs/sec. Callers convert to the channel's
+    natural unit (rpm for crank, m/s for wheel via wheel circumference).
+    All timestamp arguments are ticks (1/1024 s); see get_tick_now().
     """
 
     def __init__(self) -> None:
         self.count_float = 0.0
         self.count_int = 0
         self.event_tick = 0
+        self.rate_rps = 0.0
 
-    def inc_count(self, inc: float, now: int) -> None:
-        """Step the count by the given increment (e.g. cadence * dt / 60).
+        self._last_feed_tick = 0
+        self._last_event_revs = 0
+        self._last_event_tick = 0
 
-        `now` marks the end of the measurement interval — the event tick is
-        derived retroactively if the count crossed an integer boundary.
+    def feed_rate(self, rate_rps: float, now_tick: int) -> None:
+        """Step the count forward by rate × elapsed seconds since last feed."""
+        if self._last_feed_tick == 0:
+            self._last_feed_tick = now_tick
+            self.event_tick = now_tick
+            self.rate_rps = rate_rps
+            return
+        dt_sec = (now_tick - self._last_feed_tick) / 1024
+        self._last_feed_tick = now_tick
+        self.count_float += rate_rps * dt_sec
+        self.rate_rps = rate_rps
+        self._interpolate_event(now_tick)
+
+    def feed_event(self, cum_revs: int, event_tick: int, now_tick: int) -> None:
+        """Adopt a source-stamped event; derive rate from Δ against last event.
+
+        Deduped internally: re-feeding the same (cum_revs, event_tick) is a
+        no-op, so sources can set their event fields every poll without
+        worrying about whether a new integer crossing actually occurred.
         """
-        self.count_float += inc
-        self._compute_event(now)
-
-    def set_count(self, val: float, now: int) -> None:
-        """Set the absolute count directly.
-        """
-        self.count_float = val
-        self._compute_event(now)
+        self._last_feed_tick = now_tick
+        if event_tick != self._last_event_tick and cum_revs > self._last_event_revs:
+            dt_tick = event_tick - self._last_event_tick
+            if dt_tick > 0 and self._last_event_tick != 0:
+                d_revs = cum_revs - self._last_event_revs
+                self.rate_rps = d_revs * 1024 / dt_tick
+            self._last_event_revs = cum_revs
+            self._last_event_tick = event_tick
+        self.count_int = cum_revs
+        self.count_float = float(cum_revs)
+        self.event_tick = event_tick
 
     def get_event(self) -> tuple[int, int]:
         return self.count_int, self.event_tick
 
-    def _compute_event(self, now: int) -> None:
-        """Derive whether an event (integer crossing) occurred in the past interval.
+    def get_rate_rps(self) -> float:
+        return self.rate_rps
 
-        Checks if count_float crossed an integer boundary since the last poll.
-        If so, back-calculates the exact event_tick by linear interpolation.
-        """
+    def _interpolate_event(self, now_tick: int) -> None:
+        """Back-calculate the event tick when the count crosses an integer boundary."""
         diff = self.count_float - self.count_int
-        dt_ticks = now - self.event_tick
         if diff >= 1:
+            dt_tick = now_tick - self.event_tick
             frac_over = (diff - int(diff)) / diff
-            self.event_tick = int(now - dt_ticks * frac_over)
+            self.event_tick = int(now_tick - dt_tick * frac_over)
             self.count_int = int(self.count_float)
 
 

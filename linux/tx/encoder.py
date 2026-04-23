@@ -1,9 +1,8 @@
 import asyncio
 import math
 
-from . import *
 from bike import Bike
-from clock import now_tick
+from bridge import RateEventBridge, get_tick_now, power_to_speed
 
 
 def uint8(val):
@@ -25,38 +24,39 @@ SILENCE_TICKS = 2 * 1024  # 2 seconds — stop transmitting after this long with
 class ProtocolEncoder:
     """Consumes BikeState and produces the values BLE/ANT payloads need.
 
-    Dispatch rule, per channel (crank, wheel), is events-first:
-      1. If the source populates discrete events (has_*_event), pass them
-         through unchanged — a real encoder's interrupt timestamps are
-         always more accurate than anything we could interpolate.
-      2. Otherwise, fall back to CountGenerator interpolation driven by
-         the continuous rate (cadence for crank, speed for wheel).
-      3. If even the rate is absent, derive it where possible: the only
-         such site is power -> speed via power_to_speed(). This is the
-         sole physics hop in the pipeline.
+    Each rotational channel runs through a RateEventBridge: whichever half
+    the source provides (rate or events), the bridge fills in the other,
+    so downstream payload fields are always populated regardless of whether
+    the source is rate-driven (Keiser) or event-driven (hall sensor, sim).
 
-    Silence detection is derived, not signaled: the encoder compares
-    `state.last_update_tick` against now; if it hasn't advanced for
+    Dispatch per channel:
+      - Crank: has_crank_event → bridge.feed_event;
+               else if !isnan(cadence) → bridge.feed_rate.
+      - Wheel: has_wheel_event → bridge.feed_event;
+               else if !isnan(speed) → bridge.feed_rate(speed);
+               else if !isnan(power) → bridge.feed_rate(power_to_speed(power)).
+        Power → speed is the one physics hop in the pipeline.
+
+    Silence detection: if `state.last_update_tick` hasn't advanced within
     SILENCE_TICKS, self.no_data flips True and the tx layers skip
-    transmitting. See memory: encoder polls at 20 Hz so it can observe
-    silence (an event-blocked encoder never would).
+    transmitting. The encoder polls at 20 Hz so it can observe silence
+    (an event-blocked encoder never would).
 
-    Latched fields (self.power, .cadence, .speed, .crank_revs/.crank_event_tick,
-    .wheel_revs/.wheel_event_tick) hold the last known value so the tx loop
-    always has something to send, mirroring how a real sensor keeps
-    re-advertising its last event until a new one arrives.
+    Latched fields hold the last known value so the tx loop always has
+    something to send, mirroring how a real sensor keeps re-advertising
+    its last event until a new one arrives.
     """
 
     def __init__(self, data_src: Bike) -> None:
         self.data_src = data_src
-        self.last_feed_tick = now_tick()
 
+        self._crank_bridge = RateEventBridge()
+        self._wheel_bridge = RateEventBridge()
+
+        # Latched outputs in protocol-friendly units
         self.power = 0.0
-        self.cadence = 0.0
-        self.speed = 0.0
-
-        # Mirror BikeState's event fields: cumulative revs + tick timestamp
-        # (1/1024 s each) of the most recent integer-crossing event.
+        self.cadence = 0.0  # rpm
+        self.speed = 0.0    # m/s
         self.crank_revs = 0
         self.crank_event_tick = 0
         self.wheel_revs = 0
@@ -69,49 +69,38 @@ class ProtocolEncoder:
         self.no_data = True
 
     async def loop(self):
-        wheel_count = CountGenerator()
-        crank_count = CountGenerator()
-
         while True:
             await asyncio.sleep(0.05)
 
-            now = now_tick()
+            now_tick = get_tick_now()
             state = self.data_src.state
 
             # Silence detection: if the source hasn't stamped fresh data
             # within SILENCE_TICKS, mark no_data and skip derivation.
-            if state.last_update_tick == 0 or (now - state.last_update_tick) > SILENCE_TICKS:
+            if state.last_update_tick == 0 or (now_tick - state.last_update_tick) > SILENCE_TICKS:
                 self.no_data = True
                 continue
             self.no_data = False
 
-            dt = (now - self.last_feed_tick) / 1024
-            self.last_feed_tick = now
-
-            # Crank: events > cadence rate.
+            # Crank channel: events take priority, else rate.
             if state.has_crank_event:
-                self.crank_revs = state.crank_revs
-                self.crank_event_tick = state.crank_event_tick
+                self._crank_bridge.feed_event(state.crank_revs, state.crank_event_tick, now_tick)
             elif not math.isnan(state.cadence):
-                self.cadence = state.cadence
-                crank_count.inc_count(state.cadence * dt / 60, now)
-                self.crank_revs, self.crank_event_tick = crank_count.get_event()
+                self._crank_bridge.feed_rate(state.cadence / 60, now_tick)
+            self.crank_revs, self.crank_event_tick = self._crank_bridge.get_event()
+            self.cadence = self._crank_bridge.get_rate_rps() * 60
 
-            # Wheel: events > speed > power-derived speed.
+            # Wheel channel: events > speed > power-derived speed.
             if state.has_wheel_event:
-                self.wheel_revs = state.wheel_revs
-                self.wheel_event_tick = state.wheel_event_tick
-                if not math.isnan(state.speed):
-                    self.speed = state.speed
+                self._wheel_bridge.feed_event(state.wheel_revs, state.wheel_event_tick, now_tick)
             else:
-                speed = state.speed
-                if math.isnan(speed) and not math.isnan(state.power):
-                    speed = power_to_speed(state.power)
-                if not math.isnan(speed):
-                    inc = (speed + self.speed) / 2 * dt / WHEEL_CIRCUMFERENCE
-                    self.speed = speed
-                    wheel_count.inc_count(inc, now)
-                    self.wheel_revs, self.wheel_event_tick = wheel_count.get_event()
+                speed_mps = state.speed
+                if math.isnan(speed_mps) and not math.isnan(state.power):
+                    speed_mps = power_to_speed(state.power)
+                if not math.isnan(speed_mps):
+                    self._wheel_bridge.feed_rate(speed_mps / WHEEL_CIRCUMFERENCE, now_tick)
+            self.wheel_revs, self.wheel_event_tick = self._wheel_bridge.get_event()
+            self.speed = self._wheel_bridge.get_rate_rps() * WHEEL_CIRCUMFERENCE
 
             # Power: pass-through + ANT+ accumulators.
             if not math.isnan(state.power):

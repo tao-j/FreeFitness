@@ -2,8 +2,8 @@ import asyncio
 import struct
 from bleak import BleakScanner
 
-from . import *
-from clock import now_tick
+from . import Bike
+from bridge import get_tick_now
 
 
 class KeiserBike(Bike):
@@ -64,7 +64,7 @@ class KeiserBike(Bike):
 
                 self.state.power = float(self.power)
                 self.state.cadence = float(self.cadence)
-                self.state.last_update_tick = now_tick()
+                self.state.last_update_tick = get_tick_now()
 
                 # print(f"Version Major: {version_major}")
                 # print(f"Version Minor: {version_minor}")
