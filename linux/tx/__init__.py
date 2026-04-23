@@ -1,41 +1,56 @@
 class CountGenerator:
-    """Generates discrete count data and closest event time from continuous value
+    """Interpolates hardware-style revolution events from a continuous rate.
 
-    Note that in real world, when the count up event happens, an interrupt is triggered, then the precise event time is recorded. However here, the event time is an approximation with the assumption that the value increases steadily.
+    A real encoder emits (cumulative_count, event_tick) on each interrupt.
+    When only an instantaneous rate (e.g. cadence in rpm) is available, this
+    class integrates the rate and emits a synthetic event whenever the
+    running float count crosses the next integer. The event timestamp is
+    interpolated linearly between polls, assuming the rate was constant
+    across the interval.
+
+    All time values are in ticks (1/1024 s each); see clock.now_tick().
+
+    Usage: call inc_count() or set_count() at each poll, passing the current
+    time as `now`. This marks the end of the measurement interval. The class
+    then derives whether an integer crossing (event) occurred within that
+    interval and back-calculates the exact tick when it happened.
     """
 
     def __init__(self) -> None:
-        self.val_float = 0
-        self.val_int = 0
-        self.event_time_ms = 0
-        self.notify = False
-        self.rpm = 0
+        self.count_float = 0.0
+        self.count_int = 0
+        self.event_tick = 0
 
-    def add(self, inc, now):
-        self.val_float += inc
-        self.round(now)
+    def inc_count(self, inc: float, now: int) -> None:
+        """Step the count by the given increment (e.g. cadence * dt / 60).
 
-    def set(self, val, now):
-        self.val_float = val
-        self.round(now)
+        `now` marks the end of the measurement interval — the event tick is
+        derived retroactively if the count crossed an integer boundary.
+        """
+        self.count_float += inc
+        self._compute_event(now)
 
-    def get(self):
-        return self.val_int, self.event_time_ms
+    def set_count(self, val: float, now: int) -> None:
+        """Set the absolute count directly.
+        """
+        self.count_float = val
+        self._compute_event(now)
 
-    def round(self, now):
-        diff = self.val_float - self.val_int
-        self.rpm = diff / (now - self.event_time_ms / 1024) * 60
-        # print(diff)
+    def get_event(self) -> tuple[int, int]:
+        return self.count_int, self.event_tick
+
+    def _compute_event(self, now: int) -> None:
+        """Derive whether an event (integer crossing) occurred in the past interval.
+
+        Checks if count_float crossed an integer boundary since the last poll.
+        If so, back-calculates the exact event_tick by linear interpolation.
+        """
+        diff = self.count_float - self.count_int
+        dt_ticks = now - self.event_tick
         if diff >= 1:
-            self.event_time_ms = (
-                now * 1024
-                - (now * 1024 - self.event_time_ms) * (diff - int(diff)) / diff
-            )
-
-            self.val_int = int(self.val_float)
-            # self.notify = True
-        # else:
-        #     self.notify = False
+            frac_over = (diff - int(diff)) / diff
+            self.event_tick = int(now - dt_ticks * frac_over)
+            self.count_int = int(self.count_float)
 
 
 def power_to_speed(power):

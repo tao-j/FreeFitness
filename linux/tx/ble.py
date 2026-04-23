@@ -129,15 +129,20 @@ class CPService(Service):
     def cp_measurement(self, options):
         pass
 
-    def notify_new_rate(self, power, w_event_ms, c_event_ms, crank_rev, wheel_rev):
+    def notify_new_rate(self, power, w_event_tick, c_event_tick, crank_rev, wheel_rev):
+        # Spec quirk: Cycling Power Measurement uses 1/2048 s for the wheel
+        # event time (while its crank event time, and both CSC event times,
+        # and all ANT+ event times, are 1/1024 s). Double the canonical
+        # 1/1024-s tick here so the wire value expresses the correct instant.
+        w_event_2048 = (w_event_tick * 2) & 0xFFFF
         rate = struct.pack(
             "<HhIHHH",
             self.measure_flags,
             power & 0x7FFF,
             wheel_rev & 0xFFFFFFFF,
-            w_event_ms & 0xFFFF,
+            w_event_2048,
             crank_rev & 0xFFFF,
-            c_event_ms & 0xFFFF,
+            c_event_tick & 0xFFFF,
         )
         self.cp_measurement.changed(rate)
 
@@ -171,35 +176,35 @@ class CSCService(Service):
     # def csc_measurement_descriptor(self, options):
     #     return struct.pack("<H", *[0x0001])
 
-    def notify_all(self, wheel_rev, crank_rev, w_event_ms, c_event_ms):
+    def notify_all(self, wheel_rev, crank_rev, w_event_tick, c_event_tick):
         rate = struct.pack(
             "<BIHHH",
             CSC_F_BIT_CRANK_REVOLUTION_DATA_PRESENT
             | CSC_F_BIT_WHEEL_REVOLUTION_DATA_PRESENT,
             wheel_rev & 0xFFFFFFFF,
-            w_event_ms & 0xFFFF,
+            w_event_tick & 0xFFFF,
             crank_rev & 0xFFFF,
-            c_event_ms & 0xFFFF,
+            c_event_tick & 0xFFFF,
         )
         self.csc_measurement.changed(rate)
 
-    def notify_crank(self, wheel_rev, crank_rev, w_event_ms, c_event_ms):
+    def notify_crank(self, wheel_rev, crank_rev, w_event_tick, c_event_tick):
         rate = struct.pack(
             "<BHH",
             CSC_F_BIT_CRANK_REVOLUTION_DATA_PRESENT,
             crank_rev & 0xFFFF,
-            c_event_ms & 0xFFFF,
+            c_event_tick & 0xFFFF,
         )
         self.csc_measurement.changed(rate)
 
-    def notify_wheel(self, wheel_rev, crank_rev, w_event_ms, c_event_ms):
+    def notify_wheel(self, wheel_rev, crank_rev, w_event_tick, c_event_tick):
         rate = struct.pack(
             "<BIH",
             CSC_F_BIT_WHEEL_REVOLUTION_DATA_PRESENT,
             wheel_rev & 0xFFFFFFFF,
-            w_event_ms & 0xFFFF,
+            w_event_tick & 0xFFFF,
         )
-        self.csc_measurement.changed(rate)
+        self.csc_measurement.changed( )
 
     @characteristic(CSC_FEATURE_UUID, CharFlags.READ)
     def csc_feature(self, options):
@@ -258,39 +263,42 @@ class BLETx:
                 print("BLE: No data")
                 continue
 
-            wr = bike_data.get_wr()
-            cr = bike_data.get_cr()
-            wev = bike_data.get_wev()
-            cev = bike_data.get_cev()
+            wheel_revs = bike_data.get_wheel_revs()
+            crank_revs = bike_data.get_crank_revs()
+            wheel_event_tick = bike_data.get_wheel_event_tick()
+            crank_event_tick = bike_data.get_crank_event_tick()
             power = bike_data.get_power()
             print(
                 "BLE TX: ",
-                f"{power:3d} W {wr:6d} wREV {cr:6d} cREV",
-                f"w{wev:5d} ms c{cev:5d} ms {bike_data.speed * 3.6 / 1.67:2.1f} mph",
+                f"{power:3d} W {wheel_revs:6d} wREV {crank_revs:6d} cREV",
+                f"w{wheel_event_tick:5d} tk c{crank_event_tick:5d} tk {bike_data.speed * 3.6 / 1.67:2.1f} mph",
                 time.time(),
                 end="\n",
             )
             # if crank_rev_cls.notify and wheel_rev_cls.notify:
             if 1:
                 self.csc_service.notify_all(
-                    wheel_rev=wr, crank_rev=cr, w_event_ms=wev, c_event_ms=cev
+                    wheel_rev=wheel_revs,
+                    crank_rev=crank_revs,
+                    w_event_tick=wheel_event_tick,
+                    c_event_tick=crank_event_tick,
                 )
                 # crank_rev_cls.notify = False
                 # wheel_rev_cls.notify = False
                 # else:
                 #     if crank_rev_cls.notify:
                 #         csc_service.notify_crank(
-                #             wheel_rev=wr, crank_rev=cr, w_event_ms=wev, c_event_ms=cev
+                #             wheel_rev=wheel_revs, crank_rev=crank_revs, w_event_tick=wev, c_event_tick=cev
                 #         )
                 #     if wheel_rev_cls.notify:
                 #         csc_service.notify_wheel(
-                #             wheel_rev=wr, crank_rev=cr, w_event_ms=wev, c_event_ms=cev
+                #             wheel_rev=wheel_revs, crank_rev=crank_revs, w_event_tick=wev, c_event_tick=cev
                 #         )
             self.cp_service.notify_new_rate(
                 power=power,
-                wheel_rev=wr,
-                crank_rev=cr,
-                w_event_ms=wev,
-                c_event_ms=cev,
+                wheel_rev=wheel_revs,
+                crank_rev=crank_revs,
+                w_event_tick=wheel_event_tick,
+                c_event_tick=crank_event_tick,
             )
         # Handle dbus requests.

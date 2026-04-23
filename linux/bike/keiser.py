@@ -3,6 +3,7 @@ import struct
 from bleak import BleakScanner
 
 from . import *
+from clock import now_tick
 
 
 class KeiserBike(Bike):
@@ -22,15 +23,17 @@ class KeiserBike(Bike):
         self.distance = 0
         self.gear = 0
 
+        # Private plumbing: bleak's scanner sometimes stalls; the wait-with-timeout
+        # pattern below needs an Event to race against. Not part of the Bike contract.
+        self._new_data = asyncio.Event()
         self.scanner = BleakScanner(self.callback)
 
     def callback(self, device, advertisement_data):
         if device.name == "M3":
-            # print(advertisement_data)
             if hasattr(advertisement_data, "manufacturer_data"):
                 msd = advertisement_data.manufacturer_data
                 if self.parse_keiser_msd(msd):
-                    self.new_data.set()
+                    self._new_data.set()
 
     def parse_keiser_msd(self, msd: dict):
         for k, v in msd.items():
@@ -58,6 +61,11 @@ class KeiserBike(Bike):
                 # km
                 self.distance = (self.distance & 0x7FFF) / 10
                 self.resistence = self.gear / 24 * 100
+
+                self.state.power = float(self.power)
+                self.state.cadence = float(self.cadence)
+                self.state.last_update_tick = now_tick()
+
                 # print(f"Version Major: {version_major}")
                 # print(f"Version Minor: {version_minor}")
                 # print(f"Data Type: {data_type}")
@@ -79,10 +87,10 @@ class KeiserBike(Bike):
             await self.scanner.start()
             try:
                 async with asyncio.timeout(2):
-                    await self.new_data.wait()
-                    self.no_data = False
+                    await self._new_data.wait()
             except asyncio.TimeoutError:
+                # Scanner stalled or bike went quiet — silence propagates
+                # automatically because state.last_update_tick stops advancing.
                 print("Scan timeout, restarting\r", end="")
-                self.no_data = True
             await self.scanner.stop()
-            self.new_data.clear()
+            self._new_data.clear()

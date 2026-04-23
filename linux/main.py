@@ -37,9 +37,9 @@ async def main(bike_id: int, protocols: list[str], mock: bool, ant_driver: str):
 
     # Import and initialize bike source
     if mock:
-        from bike.sim import SimCrankPowerEncoder
+        from bike.sim import SimulatedCrankPowerSource
 
-        src = SimCrankPowerEncoder()
+        src = SimulatedCrankPowerSource()
     else:
         from bike.keiser import KeiserBike
 
@@ -49,20 +49,20 @@ async def main(bike_id: int, protocols: list[str], mock: bool, ant_driver: str):
     # Configure ANT+ transmission
     if "ant" in protocols:
         from tx.ant import ANTTx
-        from tx.conv import ANTConv
+        from tx.encoder import ANTEncoder
 
         ant_tx = ANTTx(driver_type=ant_driver)
-        ant_bike_data = ANTConv(src)
+        ant_bike_data = ANTEncoder(src)
         tasks.extend([ant_bike_data.loop(), ant_tx.loop(bike_data=ant_bike_data)])
 
     # Configure BLE transmission
     if "ble" in protocols:
         from tx.ble import BLETx
-        from tx.conv import BLEConv
+        from tx.encoder import BLEEncoder
 
         ble_tx = BLETx()
         await ble_tx.setup()
-        ble_bike_data = BLEConv(src)
+        ble_bike_data = BLEEncoder(src)
         tasks.extend([ble_bike_data.loop(), ble_tx.loop(bike_data=ble_bike_data)])
 
     try:

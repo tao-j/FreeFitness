@@ -96,8 +96,8 @@ class ANTTx:
                     continue
                 print(
                     "ANT TX: ",
-                    f"{int(bike_data.get_power()):3d} W {int(bike_data.get_cadence()):3d} RPM {bike_data.get_cum_rev_count():5d} REV "
-                    f"{bike_data.get_event_time_ms():5d} ms {bike_data.speed * 3.6 / 1.67:2.1f} mph",
+                    f"{int(bike_data.get_power()):3d} W {int(bike_data.get_cadence()):3d} RPM {bike_data.get_wheel_revs():5d} REV "
+                    f"{bike_data.get_wheel_event_tick():5d} tk {bike_data.speed * 3.6 / 1.67:2.1f} mph",
                     time.time(),
                     end="\n",
                 )
@@ -106,7 +106,7 @@ class ANTTx:
                     "<BB" + "BB" + "HH",
                     *[
                         PWR_PAGE_ID,
-                        bike_data.get_event_count(),
+                        bike_data.get_power_event_count(),
                         0xFF,  # Pedal power not used
                         bike_data.get_cadence(),
                         bike_data.get_cum_power(),
@@ -121,8 +121,8 @@ class ANTTx:
                     DEFAULT_PAGE_ID,
                     0xFF,
                     0xFFFF,
-                    bike_data.get_event_time_ms(),
-                    bike_data.get_cum_rev_count(),
+                    bike_data.get_wheel_event_tick(),
+                    bike_data.get_wheel_revs(),
                 )
                 self.send_msg(self.c_chan, payload)
 
