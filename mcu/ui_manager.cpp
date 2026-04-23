@@ -94,63 +94,77 @@ void UiManager::update(BikeData& data, ProfileConfig& config) {
 
 void UiManager::renderDashboard(const BikeData& data) {
     bool hasSignal = data.isSimMode || (millis() - data.lastDataTime < SIGNAL_TIMEOUT_MS);
-    uint32_t statusColor = data.isSimMode ? TFT_CYAN : (hasSignal ? TFT_GREEN : TFT_RED);
+    uint32_t statusColor = data.isSimMode ? TFT_BLUE : (hasSignal ? TFT_DARKGREEN : TFT_YELLOW);
 
-    // Header
+    // Header: status | BIKE# | battery
     _canvas.setFont(&fonts::FreeSans9pt7b);
-    _canvas.setTextColor(TFT_WHITE, statusColor);
     _canvas.fillRect(0, 0, _canvas.width(), 24, statusColor);
+    _canvas.setTextColor(TFT_WHITE, statusColor);
     _canvas.drawString(data.isSimMode ? " SIM" : " REAL", 4, 3);
-    
-    _canvas.setTextColor(TFT_WHITE);
-    _canvas.setCursor(_canvas.width() - 65, 3);
-    _canvas.printf("%d%%", data.batteryLevel);
 
-    // Metrics
-    _canvas.setFont(&fonts::FreeSansBold18pt7b);
-    _canvas.setTextColor(hasSignal ? TFT_YELLOW : TFT_DARKGRAY);
-    _canvas.setCursor(10, 35);
-    if (hasSignal) _canvas.printf("%d", data.power);
-    else _canvas.print("--");
-    
-    _canvas.setFont(&fonts::FreeSans9pt7b);
-    _canvas.drawString("W", _canvas.getCursorX() + 5, 52);
+    char bikeLbl[16];
+    if (data.targetBikeId == 0) snprintf(bikeLbl, sizeof(bikeLbl), "BIKE#ANY");
+    else snprintf(bikeLbl, sizeof(bikeLbl), "BIKE#%u", (unsigned)data.targetBikeId);
+    _canvas.drawCenterString(bikeLbl, _canvas.width() / 2, 3);
 
-    _canvas.setFont(&fonts::FreeSansBold18pt7b);
-    _canvas.setTextColor(hasSignal ? TFT_ORANGE : TFT_DARKGRAY);
-    _canvas.setCursor(130, 35);
-    if (hasSignal) _canvas.printf("%d", data.cadence);
-    else _canvas.print("--");
-    
-    _canvas.setFont(&fonts::FreeSans9pt7b);
-    _canvas.drawString("RPM", _canvas.getCursorX() + 5, 52);
+    char batLbl[8];
+    snprintf(batLbl, sizeof(batLbl), "%d%%", data.batteryLevel);
+    _canvas.drawRightString(batLbl, _canvas.width() - 4, 3);
 
-    // Footer
-    _canvas.drawFastHLine(0, 95, _canvas.width(), TFT_DARKGRAY);
-    _canvas.setFont(&fonts::FreeSans9pt7b);
-    _canvas.setTextColor(TFT_LIGHTGRAY);
-    _canvas.setCursor(10, 105);
-    
-    if (data.targetBikeId == 0) {
-        _canvas.printf("ANT#%d | BIKE#ANY", _ant.getDeviceId());
+    if (hasSignal) {
+        // Power
+        _canvas.setFont(&fonts::FreeSansBold18pt7b);
+        _canvas.setTextColor(TFT_YELLOW);
+        _canvas.setCursor(10, 32);
+        _canvas.printf("%d", data.power);
+        _canvas.setFont(&fonts::FreeSans9pt7b);
+        _canvas.drawString("W", _canvas.getCursorX() + 4, 49);
+
+        // Cadence
+        _canvas.setFont(&fonts::FreeSansBold18pt7b);
+        _canvas.setTextColor(TFT_ORANGE);
+        _canvas.setCursor(130, 32);
+        _canvas.printf("%d", data.cadence);
+        _canvas.setFont(&fonts::FreeSans9pt7b);
+        _canvas.drawString("RPM", _canvas.getCursorX() + 4, 49);
+
+        // Speed
+        _canvas.setFont(&fonts::FreeSansBold18pt7b);
+        _canvas.setTextColor(TFT_GREENYELLOW);
+        _canvas.setCursor(10, 72);
+        _canvas.printf("%.1f", data.speed_mps * 2.2369f);
+        _canvas.setFont(&fonts::FreeSans9pt7b);
+        _canvas.drawString("mph", _canvas.getCursorX() + 4, 89);
     } else {
-        _canvas.printf("ANT#%d | BIKE#%d", _ant.getDeviceId(), data.targetBikeId);
+        // Searching: replace metrics area with status + button hint.
+        char msg[32];
+        if (data.targetBikeId == 0) snprintf(msg, sizeof(msg), "SEARCHING ANY BIKE");
+        else snprintf(msg, sizeof(msg), "SEARCHING BIKE #%u", (unsigned)data.targetBikeId);
+
+        _canvas.setFont(&fonts::FreeSans9pt7b);
+        _canvas.setTextColor(TFT_RED);
+        _canvas.drawCenterString(msg, _canvas.width() / 2, 40);
+
+        _canvas.setTextColor(TFT_LIGHTGRAY);
+        _canvas.drawCenterString("B:+  PWR:-  hold B:ANY", _canvas.width() / 2, 70);
     }
 
-    if (!hasSignal && !data.isSimMode) {
-        _canvas.setTextColor(TFT_RED);
-        _canvas.drawCenterString(data.targetBikeId == 0 ? "SEARCHING ANY BIKE..." : "SEARCHING TARGET...", _canvas.width()/2, 75);
-    }
+    // Footer: small built-in font for ANT#/BLE#
+    _canvas.drawFastHLine(0, 110, _canvas.width(), TFT_DARKGRAY);
+    _canvas.setFont(nullptr);
+    _canvas.setTextSize(1);
+    _canvas.setTextColor(TFT_LIGHTGRAY);
+    _canvas.setCursor(6, 116);
+    _canvas.printf("ANT#%u  BLE#%04X", _ant.getDeviceId(), _ant.getDeviceId());
 
     // Indicators
     static uint8_t dotAnim = 0;
     dotAnim++;
     if (hasSignal) {
-        _canvas.fillCircle(_canvas.width() - 15, 115, 4, (dotAnim % 10 < 5) ? statusColor : TFT_BLACK);
+        _canvas.fillCircle(_canvas.width() - 15, 120, 4, (dotAnim % 10 < 5) ? statusColor : TFT_BLACK);
     }
-    
-    if (data.bleConnected) _canvas.fillCircle(_canvas.width() - 35, 115, 4, TFT_BLUE);
-    else _canvas.drawCircle(_canvas.width() - 35, 115, 4, TFT_DARKGRAY);
+    if (data.bleConnected) _canvas.fillCircle(_canvas.width() - 35, 120, 4, TFT_BLUE);
+    else _canvas.drawCircle(_canvas.width() - 35, 120, 4, TFT_DARKGRAY);
 }
 
 void UiManager::renderSettings(const ProfileConfig& config) {
