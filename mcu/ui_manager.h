@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2023-2026 Tao Jin
 #ifndef UI_MANAGER_H
 #define UI_MANAGER_H
 

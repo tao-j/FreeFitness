@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2023-2026 Tao Jin
 #include "ble_gatt.h"
 #include "config.h"
 #include <esp_flash.h>

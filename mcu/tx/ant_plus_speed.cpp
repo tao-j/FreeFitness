@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2023-2026 Tao Jin
 #include "ant_plus_speed.h"
 #include <Profiles/BicycleSpeed/ANTPLUS_BicycleSpeedDefines.h>
 #include <CommonDataPages/ANTPLUS_CommonDataPageDefines.h>

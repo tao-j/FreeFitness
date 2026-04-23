@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2023-2026 Tao Jin
 #include "keiser.h"
 
 static constexpr float WHEEL_CIRCUMFERENCE = 2.096f;  // 700c × 25 (m)

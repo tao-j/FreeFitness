@@ -55,3 +55,12 @@ First add Workout to the Health App on phone. Then go to Bike Workout on watch i
 
 ## Design & Development
 For technical documentation on protocol mappings, data structures, and internal logic, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## License
+Copyright (C) 2023-2026 Tao Jin.
+
+FreeFitness is free software: you can redistribute it and/or modify it under the terms of version 3 of the GNU General Public License as published by the Free Software Foundation. See [LICENSE](LICENSE) for the full text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Third-party components retain their own licenses (NimBLE-Arduino: Apache-2.0; M5Unified/M5GFX: MIT; ant-arduino / antplus-arduino: MIT; Arduino-ESP32: Apache-2.0 / LGPL)

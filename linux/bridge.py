@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2023-2026 Tao Jin
 """Time base and conversion primitives for the rate/event pipeline.
 
 The pipeline's single canonical time unit is the **tick** — one 1/1024-second
