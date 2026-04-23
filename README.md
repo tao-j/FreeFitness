@@ -29,16 +29,16 @@ A Python-based implementation for running on Linux. See the [Linux README](linux
 
 | Feature / Platform | Apple Watch | Garmin | Zwift (iOS) | Zwift (Android) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Power / Cadence (Bluetooth)** | ✅ | ✅ | ✅ | ✅ |
-| **Speed (Bluetooth)** | (Opt) | (Opt) | (Opt) | (Opt) |
-| **Power / Cadence (ANT+)** | ➖ | ✅ | ➖ | ➖ |
+| **Power w/ Cadence and Speed (Bluetooth)** | 👍 | 👍 | 👍 | 👍 |
+| **Cadence and Speed (Bluetooth)** | ✅ | ✅ | ✅ | ✅ |
+| **Power w/ Cadence (ANT+)** | ➖ | ✅  | ➖ | ➖ |
 | **Speed (ANT+)** | ➖ | ✅ | ➖ | ➖ |
 
-*Note: ✅ Supported | (Opt) Optional/Redundant | ➖ Not Needed/Supported*
+*Note: 👍 Recommended | ✅ Tested Working | ➖ Don't bother*
 
 ### Platform Specific Notes
 
-### watchOS 10+
+### Apple watchOS 10+
 **Bluetooth**: Just use the default wheel size 700x25mm.
 
 ### Garmin
