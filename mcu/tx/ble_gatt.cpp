@@ -18,7 +18,12 @@
 
 void BleManager::ServerCallbacks::onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) {
     _data.bleConnected = true;
-    Serial.printf("BLE: Connected from %s\n", connInfo.getAddress().toString().c_str());
+    Serial.printf("BLE: Connected from %s (total %u)\n",
+                  connInfo.getAddress().toString().c_str(),
+                  pServer->getConnectedCount());
+    // NimBLE stops advertising on connect; resume so additional centrals can
+    // still discover and connect (bounded by CONFIG_BT_NIMBLE_MAX_CONNECTIONS).
+    NimBLEDevice::startAdvertising();
 }
 
 void BleManager::ServerCallbacks::onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {

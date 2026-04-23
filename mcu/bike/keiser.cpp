@@ -59,13 +59,11 @@ void KeiserScanner::onResult(const NimBLEAdvertisedDevice* advertisedDevice) {
     _pData->wheelRevs = _wheel_bridge.count_int();
     _pData->wheelEventTime = (uint16_t)(_wheel_bridge.event_tick() * 2);  // 1/1024 → 1/2048
 
-    // ANT+ power-page accumulators (step once per fresh power sample).
-    static uint16_t lastPower = 0;
-    if (rawPower != lastPower) {
-        _pData->accPower += rawPower;
-        _pData->eventCount++;
-        lastPower = rawPower;
-    }
+    // ANT+ power-page accumulators: step on every fresh advertisement,
+    // same as the Python encoder's 20 Hz tick loop. Gating on power change
+    // under-counts because Keiser often reports the same integer watt twice.
+    _pData->accPower += rawPower;
+    _pData->eventCount++;
 
     _pData->lastUpdateTick = now_tick;
     _pData->lastDataTime = millis();

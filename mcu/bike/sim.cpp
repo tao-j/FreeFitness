@@ -20,9 +20,15 @@ void Simulator::update(uint32_t dt_ms) {
     // Δcount / Δtick (same as the Python sim).
     _time_to_next_rev_ms -= (int32_t)dt_ms;
     if (_time_to_next_rev_ms <= 0) {
+        // The rev actually fired mid-step; back-interpolate so the event
+        // tick isn't snapped to the (coarse) update cadence. Without this,
+        // dt_tick between events collapses to a few discrete values and
+        // derived cadence shows only a couple of rpm buckets.
+        int32_t overshoot_ms = -_time_to_next_rev_ms;
+        uint32_t event_tick = now_tick - (uint32_t)((int64_t)overshoot_ms * 1024 / 1000);
         _data.crankRevs++;
-        _crank_bridge.feed_event(_data.crankRevs, now_tick, now_tick);
-        _data.crankEventTime = (uint16_t)now_tick;
+        _crank_bridge.feed_event(_data.crankRevs, event_tick, now_tick);
+        _data.crankEventTime = (uint16_t)event_tick;
         _time_to_next_rev_ms += (int32_t)(60000.0f / _rpm);
     }
 
