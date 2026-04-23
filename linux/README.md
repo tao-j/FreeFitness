@@ -21,7 +21,7 @@ The system consists of two modules working asynchronously:
    - Handles protocol-specific formatting and timing (typically 4Hz).
    - If no data is received within 2 seconds, transmission should stop.
 
-The converter `tx.conv` transforms raw `bike` data into the floating-point values used by `tx`. It performs algorithmic estimations such as:
+The encoder `tx.encoder` transforms raw `bike` data into the floating-point values used by `tx`. It performs algorithmic estimations such as:
 - **CounterGenerator**: For generating revolution events.
 - **Speed Estimation**: Estimating speed from power.
 - **Wheel Revolution Estimation**: Estimating wheel revolutions from speed.
