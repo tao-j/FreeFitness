@@ -22,7 +22,14 @@ static inline uint32_t get_tick_now() {
     return (uint32_t)(((uint64_t)millis() * 1024) / 1000);
 }
 
-float power_to_speed(float power_w);
+// Power → wheel speed (m/s). Backed by a 2000-entry lookup table built at
+// boot. Input is integer watts (clamped to 0..1999 — well above real-world
+// peaks). Output stays float because the bridge integrates revolutions over
+// time and fractional rps is load-bearing.
+//
+// init_power_to_speed_lut() must run once in setup() before any source.
+void init_power_to_speed_lut();
+float power_to_speed(uint16_t power_w);
 
 
 // Bidirectional bridge between the rate view and event view of a rotating

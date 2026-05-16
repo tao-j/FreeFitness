@@ -4,29 +4,24 @@
 #define KEISER_H
 
 #include <NimBLEDevice.h>
-#include "sim.h"
-#include "../bridge.h"
+#include "bike_data.h"
+#include "../source_config.h"
 
-// Scans for Keiser M3i BLE advertisements. The bike broadcasts cadence and
-// power as instantaneous rates; this class feeds the crank/wheel bridges
-// with those rates so the downstream tx layers receive fully synthesized
-// events (same model as the Python KeiserBike source).
-class KeiserScanner : public NimBLEScanCallbacks {
+// M3 strategy: parses Keiser M3i manufacturer-data advertisements into the
+// shared BikeData. Receives advertisements from UnifiedScanner — no longer
+// owns the NimBLE scan singleton. Active only when SourceConfig.mode ==
+// SOURCE_BLE && targetType == TARGET_M3 && both address and bike ID match
+// the saved target.
+class KeiserScanner {
 public:
-    void begin(BikeData& data);
-    void update();
-
-    // NimBLEScanCallbacks
-    void onResult(const NimBLEAdvertisedDevice* advertisedDevice) override;
+    void begin(BikeData& data, const SourceConfig& cfg);
+    void stop();
+    void onAdvertisement(const NimBLEAdvertisedDevice* advertisedDevice,
+                         uint8_t m3BikeId, const uint8_t* payload);
 
 private:
     BikeData* _pData = nullptr;
-    NimBLEScan* _pScan = nullptr;
-
-    // Source-owned bridges: scanner publishes rates (cadence, power→speed),
-    // bridges synthesize the events that CSC/CP/ANT payloads require.
-    RateEventBridge _crank_bridge;
-    RateEventBridge _wheel_bridge;
+    const SourceConfig* _pCfg = nullptr;
 };
 
 #endif

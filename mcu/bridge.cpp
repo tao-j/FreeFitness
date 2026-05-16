@@ -46,8 +46,12 @@ void RateEventBridge::_interpolate_event(uint32_t now_tick) {
 }
 
 
-float power_to_speed(float power_w) {
-    // Solve P_drag·v^3 + P_roll·v − P = 0 for v (m/s).
+static constexpr uint16_t POWER_LUT_SIZE = 2000;
+static float kPowerToSpeed[POWER_LUT_SIZE];  // ~8 KB RAM
+
+// Cubic from the original derivation: solve P_drag·v^3 + P_roll·v − P = 0
+// for v (m/s). Called only at boot to fill the LUT.
+static float compute_power_to_speed(float power_w) {
     const float Cd = 0.9f;
     const float A = 0.5f;
     const float rho = 1.225f;
@@ -70,4 +74,15 @@ float power_to_speed(float power_w) {
     float u = cbrt_signed(-q / 2.0f + sqrt_delta);
     float v = cbrt_signed(-q / 2.0f - sqrt_delta);
     return u + v;
+}
+
+void init_power_to_speed_lut() {
+    for (uint16_t p = 0; p < POWER_LUT_SIZE; p++) {
+        kPowerToSpeed[p] = compute_power_to_speed((float)p);
+    }
+}
+
+float power_to_speed(uint16_t power_w) {
+    if (power_w >= POWER_LUT_SIZE) return kPowerToSpeed[POWER_LUT_SIZE - 1];
+    return kPowerToSpeed[power_w];
 }

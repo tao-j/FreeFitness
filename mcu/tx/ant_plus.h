@@ -6,21 +6,20 @@
 #include <ANT.h>
 #include <ANTPLUS.h>
 #include "ant_plus_speed.h"
-#include "bike/sim.h"
-#include "config.h"
+#include "encoder.h"
+#include "../config.h"
 
 class AntManager {
 public:
     AntManager();
     void begin(HardwareSerial& serial, const ProfileConfig& config);
-    void update(const BikeData& data);
-    void parse(BikeData& data);
+    void update(const Encoder& enc, uint8_t batteryLevel);
+    void parse();
     void openChannel();
     void closeChannel();
     uint16_t getDeviceId() const;
 
 private:
-    // Callback Handlers
     static void manufacturerIDHandler(ManufacturersInformationMsg& msg, uintptr_t data);
     static void productIDHandler(ProductInformationMsg& msg, uintptr_t data);
     static void powerOnlyHandler(BicyclePowerStandardPowerOnlyMsg& msg, uintptr_t data);
@@ -32,7 +31,8 @@ private:
     ProfileBicyclePowerSensor _bikePower;
     ProfileBicycleSpeedSensorImpl _bikeSpeed;
 
-    const BikeData* _currentData = nullptr;
+    const Encoder* _currentEnc = nullptr;
+    uint8_t _batteryLevel = 100;
     static const uint8_t NETWORK_KEY[];
     ProfileConfig _config;
 };

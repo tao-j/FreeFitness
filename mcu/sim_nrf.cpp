@@ -111,7 +111,7 @@ static void update_sim(uint32_t dt_ms) {
     }
 
 #ifdef ENABLE_WHEEL_REV
-    float speed_mps = power_to_speed(power_w);
+    float speed_mps = power_to_speed((uint16_t)power_w);
     wheel_bridge.feed_rate(speed_mps / WHEEL_CIRCUMFERENCE_M, now_tick);
     sim.wheel_revs = wheel_bridge.count_int();
     sim.wheel_tick_1024 = (uint16_t)wheel_bridge.event_tick();
@@ -165,6 +165,8 @@ void setup() {
     delay(100);
 
     randomSeed(micros());
+
+    init_power_to_speed_lut();
 
     Bluefruit.begin(MAX_PRPH_CONNECTIONS, 0);
     Bluefruit.setName(DEVICE_NAME);

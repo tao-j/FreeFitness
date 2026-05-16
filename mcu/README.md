@@ -1,6 +1,6 @@
 # MCU Implementation & Hardware Selection
 
-This directory contains the firmware implementation for the FreeFitness Data Adapter on MCU platforms.
+This directory contains the firmware implementation for the FreeFitness Data Adapter on MCU platforms. For architecture, protocol mappings, and design notes see [DEVELOPMENT.md](../DEVELOPMENT.md).
 
 ## Hardware Implementation Options
 
@@ -68,24 +68,44 @@ The following pin mappings are used for connecting an external ANT module:
 
 ## Operations & UI
 
-The firmware provides an interactive UI for real-time monitoring and configuration.
+Two pages — **Dashboard** (default) and **Settings** — plus a transient **Sensor Picker** reached by short-press from Dashboard.
 
-### Dashboard Mode (Home)
-This is the default screen showing Power (W), Cadence (RPM), and connection status.
+### Button contract
 
--   **Toggle Real/Sim Mode**: Click **BtnA** (the large main button) to switch between simulation and real sensor data.
--   **Select Bike ID**:
-    -   Click **BtnB** (side button) to increase the target Keiser Bike ID.
-    -   Click **BtnPWR** (bottom/power button) to decrease the target Bike ID.
-    -   Hold **BtnB** to reset the Bike ID to `0` (this enables "Search Any" mode, any Bike ID's data will be accepted, if there are multiple bikes indoor, data might be mixed).
--   **Enter Settings**: Hold **BtnA** to enter the Protocol Settings menu.
+| Button | Short press | Long press |
+|---|---|---|
+| **BtnA** (front) | Primary action: open picker / select entry / toggle row | Open Settings; in Settings, save & exit |
+| **BtnB** (side) | Scroll up / previous | — |
+| **BtnPWR** (bottom) | Scroll down / next | — |
 
-### Settings Mode (Profile Configuration)
-This menu allows you to enable or disable specific Bluetooth and ANT+ profiles.
+### Dashboard
+The default screen shows Power (W), Cadence (RPM), and Speed (mph), with a header chip showing the source mode (`SIM` / `BLE`) and the current target (`LOCAL`, `M3 #42`, the saved CP name, or `BLE NO PICK`), plus battery %.
 
--   **Navigation**: Use **BtnB** (Up) and **BtnPWR** (Down) to move the cursor.
--   **Toggle**: Click **BtnA** to turn a protocol ON or OFF.
--   **Save & Exit**: Hold **BtnA**. If any changes were made, the device will **save to memory and reboot** to apply the new protocol stack configuration.
+- **Short BtnA**: open Sensor Picker.
+- **Hold BtnA**: enter Settings.
+
+### Sensor Picker
+Lists every BLE bike currently being heard — Keiser M3 advertisements *and* Cycling Power services land in one merged list, each tagged `M3` or `CP`. M3 entries show the bike ID; both show name and BLE address.
+
+- **BtnB / BtnPWR**: browse list.
+- **Short BtnA**: select. Saves target + auto-flips Source to BLE if previously SIM. Returns to Dashboard, which immediately starts showing data from the new sensor.
+- **Hold BtnA**: cancel and return to Dashboard.
+
+The scanner runs always-on while in BLE mode (so the picker opens with a populated list). In SIM mode the picker temporarily starts the scanner — picking a sensor switches mode to BLE.
+
+### Settings
+Long-press BtnA from Dashboard.
+
+| Row | Type | Notes |
+|---|---|---|
+| Brightness | 1..5 | Live application. Maps to `M5.Display.setBrightness({32, 80, 128, 192, 255})`. Level 1 stays visible (no dark blank). |
+| Source | SIM / BLE | Live mode toggle. |
+| BLE CP / BLE CSC / BLE FTMS | bool | Reboot on exit to re-init GATT services. |
+| ANT+ PWR / ANT+ CSC / ANT+ FEC | bool | Reboot on exit to re-init ANT channels. |
+
+- **BtnB / BtnPWR**: scroll cursor.
+- **Short BtnA**: toggle / cycle the row under the cursor.
+- **Hold BtnA**: save & exit. Reboots only if a row that requires reboot was changed; Brightness and Source changes apply live with no reboot.
 
 ### Persistence
-All settings, including simulation mode, target Bike ID, and enabled profiles, are stored in **Non-Volatile Storage (NVS)**. They are automatically preserved across power cycles and reboots.
+All settings — source mode, target type, saved M3 bike ID + address, saved CP address/name, enabled profiles, brightness — are stored in **Non-Volatile Storage (NVS)** and automatically preserved across power cycles. Old `source` keys from previous firmware versions migrate automatically.

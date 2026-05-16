@@ -4,29 +4,30 @@
 #define BLE_GATT_H
 
 #include <NimBLEDevice.h>
-#include "bike/sim.h"
-#include "config.h"
+#include "../system_status.h"
+#include "../config.h"
+#include "encoder.h"
 
 class BleManager {
 public:
-    void begin(BikeData& data, const ProfileConfig& config);
-    void update(BikeData& data);
+    void begin(SystemStatus& status, const ProfileConfig& config);
+    void update(const Encoder& enc);
     void updateBattery(uint8_t level);
     void startAdvertising();
     void stopAdvertising();
 
 private:
-    NimBLECharacteristic* _pCPMeasurement;
-    NimBLECharacteristic* _pCSCMeasurement;
-    NimBLECharacteristic* _pBatLevel;
-    
+    NimBLECharacteristic* _pCPMeasurement = nullptr;
+    NimBLECharacteristic* _pCSCMeasurement = nullptr;
+    NimBLECharacteristic* _pBatLevel = nullptr;
+
     class ServerCallbacks : public NimBLEServerCallbacks {
     public:
-        ServerCallbacks(BikeData& data) : _data(data) {}
+        ServerCallbacks(SystemStatus& status) : _status(status) {}
         void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) override;
         void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) override;
     private:
-        BikeData& _data;
+        SystemStatus& _status;
     };
 };
 
