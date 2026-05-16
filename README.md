@@ -3,8 +3,9 @@
 A bridge to connect fitness equipment with sports watches and apps, converting raw data from various sources into required formats using scientific estimations to ensure maximum accuracy.
 
 ## Features
-- **Multi-Source**: Connect to Keiser M3i bikes, simulation modes, and more.
-- **Dual-Protocol**: Transmit data via **Bluetooth** (specifically **Bluetooth Low Energy** or **BLE**) and **ANT+**.
+- **Multi-Source**: Connect to Keiser M3i bikes, any BLE **Cycling Power (CP)** sensor (smart trainers, power meters, third-party bikes), or run a built-in simulator for testing.
+- **Unified Sensor Picker**: One on-device scan, two filters — Keiser M3 advertisements and Cycling Power services land in the same list with type tags. Pick a bike, the firmware dispatches to the right strategy automatically.
+- **Dual-Protocol Output**: Re-transmit data via **Bluetooth** (specifically **Bluetooth Low Energy** or **BLE**) and **ANT+**.
 - **Cross-Platform Support**: Compatible with Garmin, Apple Watch, Zwift, and various fitness apps.
 - **Hardware Agnostic**: Available as either a dedicated **Microcontroller Unit (MCU)** device or a Linux/SBC solution.
 
